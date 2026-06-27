@@ -293,8 +293,14 @@ public class Zoo {
         return this.address;
     }
 
-    private int getZooAnimalAmount() {
+    public int getZooAnimalAmount() {
         return numOfAnimals;
+    }
+
+    /** Returns the most recently added animal (used by Main for DB sync). */
+    public Animal getLastAddedAnimal() {
+        if (numOfAnimals > 0) return animals[numOfAnimals - 1];
+        return null;
     }
 
     public int getZooLionAmount() {

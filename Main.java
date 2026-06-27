@@ -1,5 +1,8 @@
 //lee tsayeg and rotem boltanski - zoo task 1
 package lee_tsayeg_rotem_boltanski;
+import lee_tsayeg_rotem_boltanski.db.DBConnection;
+import lee_tsayeg_rotem_boltanski.db.DBMenu;
+import lee_tsayeg_rotem_boltanski.db.ZooDAO;
 import lee_tsayeg_rotem_boltanski.exceptions.*;
 
 import java.util.Arrays;
@@ -8,6 +11,9 @@ import java.util.Scanner;
 public class Main {
     public static Scanner s = new Scanner(System.in);
     private static Zoo afekaZoo = new Zoo("Ramat Gan Zoo","Afeka");
+    private static final ZooDAO dao = new ZooDAO();
+    private static final int ZOO_ID  = 1;
+
     public final static String Menu = "\n0- Exit zoo.\n" +
             "1- Show zoo details.\n" +
             "2- Add new penguin.\n" +
@@ -18,11 +24,13 @@ public class Main {
             "7- Show zoo fish and colors.\n" +
             "8- Feed all zoo animals.\n" +
             "9- Show zoo animals noise.\n" +
-            "10- Age zoo animals in one year.\n";
+            "10- Age zoo animals in one year.\n" +
+            "11- Database operations.\n";
 
     public static void main(String[] args) {
         init();
         run();
+        DBConnection.close();
     }
     private static void run() {
         int choice;
@@ -40,6 +48,7 @@ public class Main {
                 case 8 -> feedZooAnimals();
                 case 9 -> animalMakeNoise();
                 case 10 -> animalsAgeOneYear();
+                case 11 -> DBMenu.run();
             }
         } while (choice != 0);
     }
@@ -80,8 +89,11 @@ public class Main {
                 System.out.println("Please enter a valid penguin height lower than the leader - " + afekaZoo.getLeaderHeight());
             }
         }
-        afekaZoo.addPenguin(penguinName, penguinAge, penguinHeight, afekaZoo.getZooPenguinsAmount() == 0 ? true : false);
+        boolean isLeader = afekaZoo.getZooPenguinsAmount() == 0;
+        afekaZoo.addPenguin(penguinName, penguinAge, penguinHeight, isLeader);
         System.out.println("Penguin " + penguinName + " added to zoo.");
+        // sync to DB
+        dao.insertPenguin(penguinName, penguinAge, penguinHeight, isLeader, ZOO_ID);
     }
 
 
@@ -99,6 +111,9 @@ public class Main {
         int type = validateChoice(1,2);
         if (afekaZoo.addPredator(type, lionName, lionAge, lionWeight, isFemale)){
             System.out.println("predator " + lionName + " added to zoo.");
+            // sync to DB
+            String predType = (type == 1) ? "Tiger" : "Lion";
+            dao.insertPredator(lionName, lionAge, lionWeight, isFemale, predType, ZOO_ID);
         }
         else {
             System.out.println("predator " + lionName + " was not added to zoo, please check your values.");
@@ -193,6 +208,8 @@ public class Main {
             }
         if (afekaZoo.addAFish(fishType, fishAge, fishLength, fishPattern, colors)) {
             System.out.println("Fish added to zoo.");
+            // sync to DB
+            dao.insertFish(fishAge, fishLength, fishPattern, fishType, colors, ZOO_ID);
         }
         else {
             System.out.println("Fish was not added to zoo, please check your values.");
@@ -262,6 +279,8 @@ public class Main {
         System.out.println("\nThe Aquarium fish ate: " + afekaZoo.foodForAllAnimals(AquariumFish.class) + " dishes.");
         System.out.println("\nThe Clown fish ate: " + afekaZoo.foodForAllAnimals(ClownFish.class) + " dishes.");
         System.out.println("\nThe Gold fish ate: " + afekaZoo.foodForAllAnimals(GoldFish.class) + " dishes.");
+        // log feeding event (trigger trg_feeding_auto_total calculates total_food)
+        dao.logFeedingEvent(ZOO_ID, "Menu option 8 – bulk feeding");
     }
     //------case 9------
     private static void animalMakeNoise() {
@@ -421,7 +440,7 @@ public class Main {
     private static int showMenu() {
         System.out.println(Menu);
         System.out.println("Please enter your choice");
-        return validateChoice(0,10);
+        return validateChoice(0,11);
     }
 
 
