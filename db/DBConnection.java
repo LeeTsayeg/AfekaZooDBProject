@@ -8,21 +8,23 @@ import java.sql.SQLException;
  * Singleton JDBC connection manager for zoo_db.
  *
  * SETUP:
- *   1. Install MySQL 8+ and create the database:
- *        source sql/schema.sql
- *        source sql/data.sql
- *        source sql/triggers.sql
+ *   1. Install PostgreSQL 18+ and create the database:
+ *        sudo -u postgres psql
+ *        CREATE DATABASE zoo_db;
+ *        \c zoo_db
+ *        \i sql/schema.sql
+ *        \i sql/data.sql
+ *        \i sql/triggers.sql
  *   2. Update DB_USER and DB_PASSWORD below.
- *   3. Add the MySQL JDBC driver JAR to your project classpath:
- *        https://dev.mysql.com/downloads/connector/j/
+ *   3. Add the PostgreSQL JDBC driver JAR to your project classpath:
+ *        https://jdbc.postgresql.org/download/
  */
 public class DBConnection {
 
     private static final String DB_URL  =
-            "jdbc:mysql://localhost:3306/zoo_db" +
-            "?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true";
+            "jdbc:postgresql://localhost:5432/zoo_db";
 
-    private static final String DB_USER     = "root";
+    private static final String DB_USER     = "postgres";
     private static final String DB_PASSWORD = "";   // ← update before running
 
     private static Connection instance;

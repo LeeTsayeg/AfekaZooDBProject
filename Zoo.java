@@ -53,16 +53,16 @@ public class Zoo {
                 break;
             }
         }
-        if (compareType == "1") {
+        if (compareType.equals("1")) {
             Arrays.sort(penguins, new Comparator<Penguin>() {
                 @Override
                 public int compare(Penguin p1, Penguin p2) {
                     return (p1.getPenguinName().compareTo(p2.getPenguinName()));
                 }
             });
-        } else if (compareType == "2") {
+        } else if (compareType.equals("2")) {
             Arrays.sort(penguins, new CompareHeight());
-        } else if (compareType == "3") {
+        } else if (compareType.equals("3")) {
             Arrays.sort(penguins, new Comparator<Penguin>() {
                 @Override
                 public int compare(Penguin p1, Penguin p2) {
@@ -155,12 +155,12 @@ public class Zoo {
 
     public boolean addAFish(String fishType, int age, double length, String pattern, String[] colors) {
         if (age > 0 && length > 0 && colors.length > 0) {
-            if (fishType == "Gold") {
+            if (fishType.equals("Gold")) {
                 animals = Arrays.copyOf(animals, animals.length * 2);
                 animals[numOfAnimals++] = new GoldFish(age, length, colors, pattern);
                 numOfGoldFishes++;
                 return true;
-            } else if (fishType == "Clown") {
+            } else if (fishType.equals("Clown")) {
                 animals = Arrays.copyOf(animals, animals.length * 2);
                 animals[numOfAnimals++] = new ClownFish(age, length, colors, pattern);
                 numOfClownFishes++;

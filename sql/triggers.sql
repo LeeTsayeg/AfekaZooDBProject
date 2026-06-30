@@ -2,12 +2,10 @@
 --  Zoo Database – Triggers
 -- ============================================================
 
-USE zoo_db;
-
 -- ──────────────────────────────────────────────────────────────
 --  TRIGGER 1: trg_animal_auto_die
 --
---  WHEN:    AFTER UPDATE on animal
+--  WHEN:    BEFORE UPDATE on animal
 --  WHY:     The Java ageOneYear() method decreases happiness
 --           by a random amount each year and removes animals
 --           whose happiness <= 0 OR age > MAX_AGE.
@@ -17,46 +15,45 @@ USE zoo_db;
 --           a death_record – so the audit trail is always
 --           consistent regardless of which client writes to the DB.
 --
---  RECURSION GUARD: the UPDATE inside the trigger sets is_alive=0.
---           The trigger re-fires but the condition OLD.is_alive=1
---           AND NEW.is_alive=1 will be FALSE for that second call,
---           so the body is skipped – no infinite recursion.
+--  DESIGN:  Uses BEFORE UPDATE so it can modify NEW directly.
+--           No recursive UPDATE is needed – setting NEW.is_alive
+--           takes effect as part of the same statement.
 -- ──────────────────────────────────────────────────────────────
 
-DELIMITER //
-
-CREATE TRIGGER trg_animal_auto_die
-AFTER UPDATE ON animal
-FOR EACH ROW
+CREATE OR REPLACE FUNCTION fn_animal_auto_die()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_max_age INT;
+    v_cause   VARCHAR(20);
 BEGIN
-    DECLARE v_max_age INT;
-    DECLARE v_cause   VARCHAR(20);
-
-    -- Act only on transitions from alive to (still) alive
-    IF NEW.is_alive = 1 AND OLD.is_alive = 1 THEN
+    IF NEW.is_alive AND OLD.is_alive THEN
 
         SELECT max_age INTO v_max_age
         FROM   species
         WHERE  species_id = NEW.species_id;
 
         IF NEW.happiness <= 0 THEN
-            SET v_cause = 'low_happiness';
-        ELSEIF NEW.age > v_max_age THEN
-            SET v_cause = 'old_age';
+            v_cause := 'low_happiness';
+        ELSIF NEW.age > v_max_age THEN
+            v_cause := 'old_age';
         END IF;
 
         IF v_cause IS NOT NULL THEN
-            UPDATE animal
-            SET    is_alive = 0
-            WHERE  animal_id = NEW.animal_id;
+            NEW.is_alive := FALSE;
 
             INSERT INTO death_record (animal_id, died_at, cause, age_at_death)
             VALUES (NEW.animal_id, NOW(), v_cause, NEW.age);
         END IF;
     END IF;
-END //
 
-DELIMITER ;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_animal_auto_die
+BEFORE UPDATE ON animal
+FOR EACH ROW
+EXECUTE FUNCTION fn_animal_auto_die();
 
 
 -- ──────────────────────────────────────────────────────────────
@@ -69,20 +66,17 @@ DELIMITER ;
 --           natively.  This trigger enforces the rule at the DB
 --           level so it cannot be violated by any client.
 --           Instead of silently ignoring the request, it raises
---           a SQLSTATE 45000 error so the caller knows why the
---           insert was refused.
+--           an exception so the caller knows why the insert was
+--           refused.
 -- ──────────────────────────────────────────────────────────────
 
-DELIMITER //
-
-CREATE TRIGGER trg_penguin_single_leader
-BEFORE INSERT ON penguin
-FOR EACH ROW
+CREATE OR REPLACE FUNCTION fn_penguin_single_leader()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_zoo_id         INT;
+    v_leaders_exist  INT DEFAULT 0;
 BEGIN
-    DECLARE v_zoo_id         INT;
-    DECLARE v_leaders_exist  INT DEFAULT 0;
-
-    IF NEW.is_leader = 1 THEN
+    IF NEW.is_leader THEN
         SELECT a.zoo_id
         INTO   v_zoo_id
         FROM   animal a
@@ -93,17 +87,22 @@ BEGIN
         FROM   penguin  pg
         JOIN   animal   a  ON pg.animal_id = a.animal_id
         WHERE  a.zoo_id    = v_zoo_id
-          AND  pg.is_leader = 1;
+          AND  pg.is_leader = TRUE;
 
         IF v_leaders_exist > 0 THEN
-            SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT =
+            RAISE EXCEPTION
                 'A penguin leader already exists in this zoo. Only one leader is allowed per zoo.';
         END IF;
     END IF;
-END //
 
-DELIMITER ;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_penguin_single_leader
+BEFORE INSERT ON penguin
+FOR EACH ROW
+EXECUTE FUNCTION fn_penguin_single_leader();
 
 
 -- ──────────────────────────────────────────────────────────────
@@ -119,19 +118,20 @@ DELIMITER ;
 --           evolves and forgets to send the total.
 -- ──────────────────────────────────────────────────────────────
 
-DELIMITER //
+CREATE OR REPLACE FUNCTION fn_feeding_auto_total()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.total_food := (
+        SELECT COALESCE(SUM(a.food_amount), 0)
+        FROM   animal a
+        WHERE  a.zoo_id   = NEW.zoo_id
+          AND  a.is_alive  = TRUE
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_feeding_auto_total
 BEFORE INSERT ON feeding_event
 FOR EACH ROW
-BEGIN
-    -- Override whatever the application sent; compute from live data.
-    SET NEW.total_food = (
-        SELECT COALESCE(SUM(a.food_amount), 0)
-        FROM   animal a
-        WHERE  a.zoo_id  = NEW.zoo_id
-          AND  a.is_alive = 1
-    );
-END //
-
-DELIMITER ;
+EXECUTE FUNCTION fn_feeding_auto_total();

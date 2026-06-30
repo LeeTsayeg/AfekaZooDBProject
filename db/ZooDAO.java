@@ -272,7 +272,7 @@ public class ZooDAO {
 
     /** Increments age by 1 and decreases happiness by a given amount. */
     public void ageAnimal(int animalId, int happinessDecrease) {
-        String sql = "UPDATE animal SET age = age + 1, happiness = GREATEST(0, happiness - ?) WHERE animal_id = ? AND is_alive = 1";
+        String sql = "UPDATE animal SET age = age + 1, happiness = GREATEST(0, happiness - ?) WHERE animal_id = ? AND is_alive = TRUE";
         try (Connection c  = DBConnection.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, happinessDecrease);
@@ -359,7 +359,7 @@ public class ZooDAO {
             "    UNION ALL " +
             "    SELECT animal_id, name FROM penguin " +
             ") n ON a.animal_id = n.animal_id " +
-            "WHERE a.is_alive = 1 AND n.name LIKE ? " +
+            "WHERE a.is_alive = TRUE AND n.name LIKE ? " +
             "ORDER BY s.category, n.name";
         System.out.println("\n=== Search by name: '" + keyword + "' ===");
         try (Connection c  = DBConnection.getConnection();
@@ -377,7 +377,7 @@ public class ZooDAO {
             "SELECT a.animal_id, s.species_name, a.age, a.happiness, a.food_amount " +
             "FROM animal a " +
             "JOIN species s ON a.species_id = s.species_id " +
-            "WHERE a.is_alive = 1 AND s.species_name LIKE ? " +
+            "WHERE a.is_alive = TRUE AND s.species_name LIKE ? " +
             "ORDER BY a.age";
         System.out.println("\n=== Search by species: '" + speciesName + "' ===");
         try (Connection c  = DBConnection.getConnection();
@@ -395,7 +395,7 @@ public class ZooDAO {
             "SELECT a.animal_id, s.species_name, a.age, a.happiness " +
             "FROM animal a " +
             "JOIN species s ON a.species_id = s.species_id " +
-            "WHERE a.is_alive = 1 AND a.age BETWEEN ? AND ? " +
+            "WHERE a.is_alive = TRUE AND a.age BETWEEN ? AND ? " +
             "ORDER BY a.age, s.species_name";
         System.out.println("\n=== Search by age range [" + minAge + " – " + maxAge + "] ===");
         try (Connection c  = DBConnection.getConnection();
@@ -418,27 +418,27 @@ public class ZooDAO {
             "SELECT a.animal_id, s.species_name, s.category, a.age, " +
             "a.happiness, ROUND(a.food_amount,2) AS daily_food " +
             "FROM animal a JOIN species s ON a.species_id=s.species_id " +
-            "WHERE a.is_alive=1 ORDER BY s.category, s.species_name, a.age");
+            "WHERE a.is_alive=TRUE ORDER BY s.category, s.species_name, a.age");
     }
 
     /** Q2: Predator food-consumption ranking. */
     public void q2PredatorFoodRanking() {
         run("Q2: Predator food ranking",
             "SELECT p.name, p.predator_type, " +
-            "CASE WHEN p.is_female=1 THEN 'female' ELSE 'male' END AS gender, " +
+            "CASE WHEN p.is_female THEN 'female' ELSE 'male' END AS gender, " +
             "p.weight AS weight_kg, a.age, ROUND(a.food_amount,2) AS daily_food_kg " +
             "FROM predator p JOIN animal a ON p.animal_id=a.animal_id " +
-            "WHERE a.is_alive=1 ORDER BY a.food_amount DESC");
+            "WHERE a.is_alive=TRUE ORDER BY a.food_amount DESC");
     }
 
     /** Q3: Penguins sorted by height (tallest first). */
     public void q3PenguinsByHeight() {
         run("Q3: Penguins by height",
             "SELECT pg.name, pg.height AS height_cm, " +
-            "CASE WHEN pg.is_leader=1 THEN 'YES' ELSE 'no' END AS is_leader, " +
+            "CASE WHEN pg.is_leader THEN 'YES' ELSE 'no' END AS is_leader, " +
             "a.age, a.happiness " +
             "FROM penguin pg JOIN animal a ON pg.animal_id=a.animal_id " +
-            "WHERE a.is_alive=1 ORDER BY pg.height DESC");
+            "WHERE a.is_alive=TRUE ORDER BY pg.height DESC");
     }
 
     /** Q4: Two most common fish colours. */
@@ -448,7 +448,7 @@ public class ZooDAO {
             "FROM fish_color fc " +
             "JOIN fish   f ON fc.fish_id   = f.fish_id " +
             "JOIN animal a ON f.animal_id  = a.animal_id " +
-            "WHERE a.is_alive=1 " +
+            "WHERE a.is_alive=TRUE " +
             "GROUP BY fc.color_name ORDER BY fish_count DESC LIMIT 2");
     }
 
@@ -456,14 +456,14 @@ public class ZooDAO {
     public void q5LowHappinessAnimals() {
         run("Q5: At-risk animals (happiness < 50)",
             "SELECT a.animal_id, s.species_name, " +
-            "COALESCE(p.name, pg.name, CONCAT('Fish#',f.fish_id)) AS name, " +
+            "COALESCE(p.name, pg.name, 'Fish#' || f.fish_id) AS name, " +
             "a.age, a.happiness, s.max_age - a.age AS years_left " +
             "FROM animal a " +
             "JOIN species  s  ON a.species_id = s.species_id " +
             "LEFT JOIN predator p  ON a.animal_id = p.animal_id " +
             "LEFT JOIN penguin  pg ON a.animal_id = pg.animal_id " +
             "LEFT JOIN fish     f  ON a.animal_id = f.animal_id " +
-            "WHERE a.is_alive=1 AND a.happiness < 50 " +
+            "WHERE a.is_alive=TRUE AND a.happiness < 50 " +
             "ORDER BY a.happiness ASC");
     }
 
@@ -471,8 +471,8 @@ public class ZooDAO {
     public void q6AnimalCountBySpecies() {
         run("Q6: Animal count by species",
             "SELECT s.species_name, s.category, " +
-            "SUM(CASE WHEN a.is_alive=1 THEN 1 ELSE 0 END) AS living, " +
-            "SUM(CASE WHEN a.is_alive=0 THEN 1 ELSE 0 END) AS dead, " +
+            "SUM(CASE WHEN a.is_alive THEN 1 ELSE 0 END) AS living, " +
+            "SUM(CASE WHEN NOT a.is_alive THEN 1 ELSE 0 END) AS dead, " +
             "COUNT(*) AS total " +
             "FROM animal a JOIN species s ON a.species_id=s.species_id " +
             "GROUP BY s.species_id, s.species_name, s.category " +
@@ -485,7 +485,7 @@ public class ZooDAO {
             "SELECT s.category, ROUND(AVG(a.happiness),1) AS avg, " +
             "MIN(a.happiness) AS min, MAX(a.happiness) AS max, COUNT(*) AS count " +
             "FROM animal a JOIN species s ON a.species_id=s.species_id " +
-            "WHERE a.is_alive=1 GROUP BY s.category ORDER BY avg ASC");
+            "WHERE a.is_alive=TRUE GROUP BY s.category ORDER BY avg ASC");
     }
 
     /** Q8: Oldest living animal per species (age as % of lifespan). */
@@ -495,7 +495,7 @@ public class ZooDAO {
             "s.max_age AS species_max_age, " +
             "ROUND(100.0*MAX(a.age)/s.max_age,1) AS pct_of_lifespan " +
             "FROM animal a JOIN species s ON a.species_id=s.species_id " +
-            "WHERE a.is_alive=1 " +
+            "WHERE a.is_alive=TRUE " +
             "GROUP BY s.species_id, s.species_name, s.max_age " +
             "ORDER BY pct_of_lifespan DESC");
     }
@@ -504,7 +504,7 @@ public class ZooDAO {
     public void q9DeathRecords() {
         run("Q9: Death records",
             "SELECT dr.death_id, s.species_name, " +
-            "COALESCE(p.name, pg.name, CONCAT('Fish#',f.fish_id)) AS name, " +
+            "COALESCE(p.name, pg.name, 'Fish#' || f.fish_id) AS name, " +
             "dr.cause, dr.age_at_death, dr.died_at " +
             "FROM death_record dr " +
             "JOIN animal   a  ON dr.animal_id = a.animal_id " +
@@ -515,16 +515,16 @@ public class ZooDAO {
             "ORDER BY dr.died_at DESC");
     }
 
-    /** Q10: Each fish with all its colours (GROUP_CONCAT). */
+    /** Q10: Each fish with all its colours (STRING_AGG). */
     public void q10FishWithColors() {
         run("Q10: Fish with colours",
             "SELECT f.fish_id, f.fish_type, f.pattern, f.length AS length_cm, " +
             "a.age, a.happiness, " +
-            "GROUP_CONCAT(fc.color_name ORDER BY fc.color_name SEPARATOR ', ') AS colors " +
+            "STRING_AGG(fc.color_name, ', ' ORDER BY fc.color_name) AS colors " +
             "FROM fish f " +
             "JOIN animal a ON f.animal_id = a.animal_id " +
             "LEFT JOIN fish_color fc ON f.fish_id = fc.fish_id " +
-            "WHERE a.is_alive=1 " +
+            "WHERE a.is_alive=TRUE " +
             "GROUP BY f.fish_id, f.fish_type, f.pattern, f.length, a.age, a.happiness " +
             "ORDER BY f.fish_type, f.fish_id");
     }
@@ -534,10 +534,10 @@ public class ZooDAO {
         run("Q11: Zoo statistics",
             "SELECT z.name AS zoo_name, z.address, " +
             "COUNT(DISTINCT a.animal_id) AS total_animals, " +
-            "SUM(CASE WHEN a.is_alive=1 THEN 1 ELSE 0 END) AS living, " +
-            "SUM(CASE WHEN a.is_alive=0 THEN 1 ELSE 0 END) AS dead, " +
-            "ROUND(AVG(CASE WHEN a.is_alive=1 THEN a.happiness END),1) AS avg_happiness, " +
-            "ROUND(SUM(CASE WHEN a.is_alive=1 THEN a.food_amount ELSE 0 END),2) AS total_daily_food " +
+            "SUM(CASE WHEN a.is_alive THEN 1 ELSE 0 END) AS living, " +
+            "SUM(CASE WHEN NOT a.is_alive THEN 1 ELSE 0 END) AS dead, " +
+            "ROUND(AVG(CASE WHEN a.is_alive THEN a.happiness END),1) AS avg_happiness, " +
+            "ROUND(SUM(CASE WHEN a.is_alive THEN a.food_amount ELSE 0 END),2) AS total_daily_food " +
             "FROM zoo z LEFT JOIN animal a ON z.zoo_id=a.zoo_id " +
             "GROUP BY z.zoo_id, z.name, z.address");
     }
