@@ -1,6 +1,6 @@
 -- ============================================================
 --  Zoo Database Schema
---  MySQL 8.0+  |  Normalized to 3NF
+--  PostgreSQL 18+  |  Normalized to 3NF
 -- ============================================================
 --
 --  3NF JUSTIFICATION
@@ -23,19 +23,26 @@
 --       depends only on the PK.
 --
 -- ============================================================
-
-DROP DATABASE IF EXISTS zoo_db;
-CREATE DATABASE zoo_db
-    CHARACTER SET utf8mb4
-    COLLATE utf8mb4_unicode_ci;
-USE zoo_db;
+--
+--  SETUP
+--  -----
+--  Run once from psql as the postgres superuser:
+--
+--      DROP DATABASE IF EXISTS zoo_db;
+--      CREATE DATABASE zoo_db;
+--      \c zoo_db
+--      \i schema.sql
+--      \i data.sql
+--      \i triggers.sql
+--
+-- ============================================================
 
 -- ── 1. zoo ───────────────────────────────────────────────────
 -- Top-level container.  All animals and feeding events belong to
 -- a zoo.  zoo_name is a candidate key (UNIQUE).
 
 CREATE TABLE zoo (
-    zoo_id     INT           NOT NULL AUTO_INCREMENT,
+    zoo_id     INT           GENERATED ALWAYS AS IDENTITY,
     name       VARCHAR(100)  NOT NULL,
     address    VARCHAR(200)  NOT NULL,
     created_at TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -49,14 +56,15 @@ CREATE TABLE zoo (
 -- species_name is a candidate key (UNIQUE).
 
 CREATE TABLE species (
-    species_id   INT         NOT NULL AUTO_INCREMENT,
+    species_id   INT         GENERATED ALWAYS AS IDENTITY,
     species_name VARCHAR(50) NOT NULL,
-    category     ENUM('predator','penguin','fish') NOT NULL,
+    category     VARCHAR(20) NOT NULL,
     max_age      INT         NOT NULL,
     food_type    VARCHAR(50) NOT NULL,
     CONSTRAINT pk_species       PRIMARY KEY (species_id),
     CONSTRAINT uq_species_name  UNIQUE      (species_name),
-    CONSTRAINT chk_max_age      CHECK       (max_age > 0)
+    CONSTRAINT chk_max_age      CHECK       (max_age > 0),
+    CONSTRAINT chk_category     CHECK       (category IN ('predator','penguin','fish'))
 );
 
 -- ── 3. animal ────────────────────────────────────────────────
@@ -65,12 +73,12 @@ CREATE TABLE species (
 -- one row here plus one row in the matching subtype table.
 
 CREATE TABLE animal (
-    animal_id   INT           NOT NULL AUTO_INCREMENT,
+    animal_id   INT           GENERATED ALWAYS AS IDENTITY,
     zoo_id      INT           NOT NULL,
     species_id  INT           NOT NULL,
     age         INT           NOT NULL,
     happiness   INT           NOT NULL DEFAULT 100,
-    is_alive    TINYINT(1)    NOT NULL DEFAULT 1,
+    is_alive    BOOLEAN       NOT NULL DEFAULT TRUE,
     food_amount DECIMAL(8,2)  NOT NULL DEFAULT 0.00,
     created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_animal            PRIMARY KEY (animal_id),
@@ -85,29 +93,30 @@ CREATE TABLE animal (
 -- UNIQUE(animal_id) enforces the 1-to-1 relationship with animal.
 
 CREATE TABLE predator (
-    predator_id   INT          NOT NULL AUTO_INCREMENT,
+    predator_id   INT          GENERATED ALWAYS AS IDENTITY,
     animal_id     INT          NOT NULL,
     name          VARCHAR(50)  NOT NULL,
     weight        DECIMAL(6,2) NOT NULL,
-    is_female     TINYINT(1)   NOT NULL,
-    predator_type ENUM('Lion','Tiger') NOT NULL,
+    is_female     BOOLEAN      NOT NULL,
+    predator_type VARCHAR(10)  NOT NULL,
     CONSTRAINT pk_predator        PRIMARY KEY (predator_id),
     CONSTRAINT fk_predator_animal FOREIGN KEY (animal_id) REFERENCES animal(animal_id) ON DELETE CASCADE,
     CONSTRAINT uq_predator_animal UNIQUE      (animal_id),
-    CONSTRAINT chk_predator_weight CHECK (weight > 0)
+    CONSTRAINT chk_predator_weight CHECK (weight > 0),
+    CONSTRAINT chk_predator_type   CHECK (predator_type IN ('Lion','Tiger'))
 );
 
 -- ── 5. penguin ───────────────────────────────────────────────
 -- Subtype for Penguins.
--- Business rule: at most one penguin per zoo may have is_leader = 1.
+-- Business rule: at most one penguin per zoo may have is_leader = TRUE.
 -- Enforced via trigger trg_penguin_single_leader (see triggers.sql).
 
 CREATE TABLE penguin (
-    penguin_id INT          NOT NULL AUTO_INCREMENT,
+    penguin_id INT          GENERATED ALWAYS AS IDENTITY,
     animal_id  INT          NOT NULL,
     name       VARCHAR(50)  NOT NULL,
     height     DECIMAL(6,2) NOT NULL,
-    is_leader  TINYINT(1)   NOT NULL DEFAULT 0,
+    is_leader  BOOLEAN      NOT NULL DEFAULT FALSE,
     CONSTRAINT pk_penguin        PRIMARY KEY (penguin_id),
     CONSTRAINT fk_penguin_animal FOREIGN KEY (animal_id) REFERENCES animal(animal_id) ON DELETE CASCADE,
     CONSTRAINT uq_penguin_animal UNIQUE      (animal_id),
@@ -119,15 +128,16 @@ CREATE TABLE penguin (
 -- CHECK constraints enforce the fixed pattern rules for Gold/Clown.
 
 CREATE TABLE fish (
-    fish_id   INT          NOT NULL AUTO_INCREMENT,
+    fish_id   INT          GENERATED ALWAYS AS IDENTITY,
     animal_id INT          NOT NULL,
     length    DECIMAL(6,2) NOT NULL,
     pattern   VARCHAR(50)  NOT NULL,
-    fish_type ENUM('Gold','Clown','Aquarium') NOT NULL,
+    fish_type VARCHAR(10)  NOT NULL,
     CONSTRAINT pk_fish        PRIMARY KEY (fish_id),
     CONSTRAINT fk_fish_animal FOREIGN KEY (animal_id) REFERENCES animal(animal_id) ON DELETE CASCADE,
     CONSTRAINT uq_fish_animal UNIQUE      (animal_id),
     CONSTRAINT chk_fish_length  CHECK (length > 0),
+    CONSTRAINT chk_fish_type    CHECK (fish_type IN ('Gold','Clown','Aquarium')),
     CONSTRAINT chk_fish_pattern CHECK (
         (fish_type = 'Gold'   AND pattern = 'Smooth')  OR
         (fish_type = 'Clown'  AND pattern = 'Stripes') OR
@@ -141,7 +151,7 @@ CREATE TABLE fish (
 -- UNIQUE(fish_id, color_name) prevents duplicates.
 
 CREATE TABLE fish_color (
-    color_id   INT         NOT NULL AUTO_INCREMENT,
+    color_id   INT         GENERATED ALWAYS AS IDENTITY,
     fish_id    INT         NOT NULL,
     color_name VARCHAR(50) NOT NULL,
     CONSTRAINT pk_fish_color      PRIMARY KEY (color_id),
@@ -154,7 +164,7 @@ CREATE TABLE fish_color (
 -- total_food is auto-calculated by trigger trg_feeding_auto_total.
 
 CREATE TABLE feeding_event (
-    event_id   INT           NOT NULL AUTO_INCREMENT,
+    event_id   INT           GENERATED ALWAYS AS IDENTITY,
     zoo_id     INT           NOT NULL,
     fed_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     total_food DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -168,13 +178,14 @@ CREATE TABLE feeding_event (
 -- UNIQUE(animal_id) enforces that each animal dies at most once.
 
 CREATE TABLE death_record (
-    death_id     INT       NOT NULL AUTO_INCREMENT,
-    animal_id    INT       NOT NULL,
-    died_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    cause        ENUM('old_age','low_happiness') NOT NULL,
-    age_at_death INT       NOT NULL,
+    death_id     INT         GENERATED ALWAYS AS IDENTITY,
+    animal_id    INT         NOT NULL,
+    died_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cause        VARCHAR(20) NOT NULL,
+    age_at_death INT         NOT NULL,
     CONSTRAINT pk_death_record  PRIMARY KEY (death_id),
     CONSTRAINT fk_death_animal  FOREIGN KEY (animal_id) REFERENCES animal(animal_id),
     CONSTRAINT uq_death_animal  UNIQUE (animal_id),
-    CONSTRAINT chk_death_age    CHECK (age_at_death >= 0)
+    CONSTRAINT chk_death_age    CHECK (age_at_death >= 0),
+    CONSTRAINT chk_death_cause  CHECK (cause IN ('old_age','low_happiness'))
 );

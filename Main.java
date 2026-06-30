@@ -263,7 +263,7 @@ public class Main {
 
     //------case 7------
     private static void showFishDetails() {
-        if (afekaZoo.getZooClownAmount() != 0 && afekaZoo.getZooGoldAmount() != 0 && afekaZoo.getZooAquariumAmount() != 0) {
+        if (afekaZoo.getZooClownAmount() != 0 || afekaZoo.getZooGoldAmount() != 0 || afekaZoo.getZooAquariumAmount() != 0) {
             System.out.println("The zoo Aquarium Fish details:");
             System.out.println(afekaZoo.getZooFishDetails());
         }

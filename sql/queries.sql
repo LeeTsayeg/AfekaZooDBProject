@@ -1,8 +1,6 @@
 -- ============================================================
---  Zoo Database – 10 Meaningful SQL Queries
+--  Zoo Database – 12 Meaningful SQL Queries
 -- ============================================================
-
-USE zoo_db;
 
 -- ──────────────────────────────────────────────────────────────
 --  Q1: All living animals with species name and category
@@ -17,7 +15,7 @@ SELECT
     ROUND(a.food_amount, 2) AS daily_food
 FROM animal a
 JOIN species s ON a.species_id = s.species_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 ORDER BY s.category, s.species_name, a.age;
 
 -- ──────────────────────────────────────────────────────────────
@@ -27,13 +25,13 @@ ORDER BY s.category, s.species_name, a.age;
 SELECT
     p.name,
     p.predator_type,
-    CASE WHEN p.is_female = 1 THEN 'female' ELSE 'male' END AS gender,
+    CASE WHEN p.is_female THEN 'female' ELSE 'male' END AS gender,
     p.weight                      AS weight_kg,
     a.age,
     ROUND(a.food_amount, 2)       AS daily_food_kg
 FROM predator p
 JOIN animal a ON p.animal_id = a.animal_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 ORDER BY a.food_amount DESC;
 
 -- ──────────────────────────────────────────────────────────────
@@ -42,13 +40,13 @@ ORDER BY a.food_amount DESC;
 -- ──────────────────────────────────────────────────────────────
 SELECT
     pg.name,
-    pg.height                                    AS height_cm,
-    CASE WHEN pg.is_leader = 1 THEN 'YES' ELSE 'no' END AS is_leader,
+    pg.height                                            AS height_cm,
+    CASE WHEN pg.is_leader THEN 'YES' ELSE 'no' END     AS is_leader,
     a.age,
     a.happiness
 FROM penguin pg
 JOIN animal a ON pg.animal_id = a.animal_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 ORDER BY pg.height DESC;
 
 -- ──────────────────────────────────────────────────────────────
@@ -61,7 +59,7 @@ SELECT
 FROM fish_color fc
 JOIN fish      f ON fc.fish_id    = f.fish_id
 JOIN animal    a ON f.animal_id   = a.animal_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 GROUP BY fc.color_name
 ORDER BY fish_count DESC
 LIMIT 2;
@@ -74,7 +72,7 @@ SELECT
     a.animal_id,
     s.species_name,
     s.category,
-    COALESCE(p.name, pg.name, CONCAT('Fish #', f.fish_id)) AS name,
+    COALESCE(p.name, pg.name, 'Fish #' || f.fish_id) AS name,
     a.age,
     a.happiness,
     s.max_age - a.age AS years_to_natural_end
@@ -83,7 +81,7 @@ JOIN species  s  ON a.species_id  = s.species_id
 LEFT JOIN predator p  ON a.animal_id = p.animal_id
 LEFT JOIN penguin  pg ON a.animal_id = pg.animal_id
 LEFT JOIN fish     f  ON a.animal_id = f.animal_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
   AND a.happiness < 50
 ORDER BY a.happiness ASC;
 
@@ -94,9 +92,9 @@ ORDER BY a.happiness ASC;
 SELECT
     s.species_name,
     s.category,
-    SUM(CASE WHEN a.is_alive = 1 THEN 1 ELSE 0 END) AS living,
-    SUM(CASE WHEN a.is_alive = 0 THEN 1 ELSE 0 END) AS dead,
-    COUNT(*)                                          AS total
+    SUM(CASE WHEN a.is_alive THEN 1 ELSE 0 END) AS living,
+    SUM(CASE WHEN NOT a.is_alive THEN 1 ELSE 0 END) AS dead,
+    COUNT(*)                                      AS total
 FROM animal  a
 JOIN species s ON a.species_id = s.species_id
 GROUP BY s.species_id, s.species_name, s.category
@@ -114,7 +112,7 @@ SELECT
     COUNT(*)                     AS animal_count
 FROM animal  a
 JOIN species s ON a.species_id = s.species_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 GROUP BY s.category
 ORDER BY avg_happiness ASC;
 
@@ -129,7 +127,7 @@ SELECT
     ROUND(100.0 * MAX(a.age) / s.max_age, 1)      AS pct_of_lifespan
 FROM animal  a
 JOIN species s ON a.species_id = s.species_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 GROUP BY s.species_id, s.species_name, s.max_age
 ORDER BY pct_of_lifespan DESC;
 
@@ -140,7 +138,7 @@ ORDER BY pct_of_lifespan DESC;
 SELECT
     dr.death_id,
     s.species_name,
-    COALESCE(p.name, pg.name, CONCAT('Fish #', f.fish_id)) AS name,
+    COALESCE(p.name, pg.name, 'Fish #' || f.fish_id) AS name,
     dr.cause,
     dr.age_at_death,
     dr.died_at
@@ -153,21 +151,21 @@ LEFT JOIN fish     f  ON a.animal_id = f.animal_id
 ORDER BY dr.died_at DESC;
 
 -- ──────────────────────────────────────────────────────────────
---  Q10: Each fish with its full colour list (GROUP_CONCAT)
+--  Q10: Each fish with its full colour list (STRING_AGG)
 --  Purpose: replaces the Java Arrays.toString(colors) report.
 -- ──────────────────────────────────────────────────────────────
 SELECT
     f.fish_id,
     f.fish_type,
     f.pattern,
-    f.length                                                  AS length_cm,
+    f.length                                                   AS length_cm,
     a.age,
     a.happiness,
-    GROUP_CONCAT(fc.color_name ORDER BY fc.color_name SEPARATOR ', ') AS colors
+    STRING_AGG(fc.color_name, ', ' ORDER BY fc.color_name)     AS colors
 FROM fish      f
 JOIN animal    a  ON f.animal_id = a.animal_id
 LEFT JOIN fish_color fc ON f.fish_id = fc.fish_id
-WHERE a.is_alive = 1
+WHERE a.is_alive = TRUE
 GROUP BY f.fish_id, f.fish_type, f.pattern, f.length, a.age, a.happiness
 ORDER BY f.fish_type, f.fish_id;
 
@@ -179,10 +177,10 @@ SELECT
     z.name                                                            AS zoo_name,
     z.address,
     COUNT(DISTINCT a.animal_id)                                        AS total_animals,
-    SUM(CASE WHEN a.is_alive = 1 THEN 1 ELSE 0 END)                   AS living_animals,
-    SUM(CASE WHEN a.is_alive = 0 THEN 1 ELSE 0 END)                   AS dead_animals,
-    ROUND(AVG(CASE WHEN a.is_alive = 1 THEN a.happiness END), 1)      AS avg_happiness,
-    ROUND(SUM(CASE WHEN a.is_alive = 1 THEN a.food_amount ELSE 0 END), 2) AS total_daily_food
+    SUM(CASE WHEN a.is_alive THEN 1 ELSE 0 END)                       AS living_animals,
+    SUM(CASE WHEN NOT a.is_alive THEN 1 ELSE 0 END)                   AS dead_animals,
+    ROUND(AVG(CASE WHEN a.is_alive THEN a.happiness END), 1)          AS avg_happiness,
+    ROUND(SUM(CASE WHEN a.is_alive THEN a.food_amount ELSE 0 END), 2) AS total_daily_food
 FROM zoo   z
 LEFT JOIN animal a ON z.zoo_id = a.zoo_id
 GROUP BY z.zoo_id, z.name, z.address;
